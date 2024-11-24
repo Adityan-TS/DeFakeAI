@@ -7,6 +7,7 @@ from tensorflow.keras.models import load_model
 import shutil
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+tf.config.set_visible_devices([], 'GPU')
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.config.threading.set_intra_op_parallelism_threads(8)

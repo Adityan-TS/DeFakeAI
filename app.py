@@ -69,8 +69,6 @@ def is_deepfake(video_path):
         return "Could not open video file.", None, None, None, []
 
     frames = []
-    predictions = []
-    deepfake_frames = []
     deepfake_frame_paths = []
 
     while True:
@@ -84,10 +82,22 @@ def is_deepfake(video_path):
 
     cap.release()
 
+    # If there are frames to process
     if frames:
         frames_array = np.array(frames)
-        frame_predictions = model.predict(frames_array)
+        
+        # Use batch processing
+        batch_size = 32  # Adjust batch size depending on the available memory
+        frame_predictions = []
 
+        # Process the frames in batches
+        for i in range(0, len(frames_array), batch_size):
+            batch = frames_array[i:i+batch_size]
+            batch_predictions = model.predict(batch)
+            frame_predictions.extend(batch_predictions)
+
+        # Post-process predictions
+        deepfake_frames = []
         for i, pred in enumerate(frame_predictions):
             if pred < 0.5:
                 deepfake_frames.append(frames[i])

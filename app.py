@@ -109,10 +109,11 @@ def is_deepfake(video_path):
     if frame_predictions:
         deepfake_frames_count = 0
         for i, pred in enumerate(frame_predictions):
-            if pred < 0.5:  # Deepfake threshold
+            if pred < 0.5:
+                deepfake_frame = frames[i]
                 deepfake_frame_filename = f"deepfake_frame_{i}.jpg"
                 deepfake_frame_path = os.path.join(STATIC_FOLDER, deepfake_frame_filename)
-                cv2.imwrite(deepfake_frame_path, (frames_batch[i % batch_size] * 255).astype(np.uint8))
+                cv2.imwrite(deepfake_frame_path, (deepfake_frame * 255).astype(np.uint8))
                 deepfake_frame_paths.append(f"/deepfake-frames/{deepfake_frame_filename}")
                 deepfake_frames_count += 1
 

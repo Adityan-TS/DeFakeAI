@@ -13,7 +13,6 @@ STATIC_FOLDER = 'static/deepfake_frames'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
-# Load the deepfake detection model
 model = load_model(r'defake_ai_best.keras')
 
 @app.route('/')
@@ -30,20 +29,15 @@ def upload():
     if video_file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
-    # Secure the file name and save it
     video_path = os.path.join(UPLOAD_FOLDER, video_file.filename)
     video_file.save(video_path)
 
-    # Process the video and analyze for deepfakes
     result, f1_score, accuracy, deepfake_percentage, deepfake_frame_paths = is_deepfake(video_path)
 
-    # Remove video file after processing
     os.remove(video_path)
 
-    # Store deepfake frame paths in the session
     session['deepfake_frame_paths'] = deepfake_frame_paths
 
-    # Return results in JSON format
     response = {
         'result': result,
         'f1_score': float(f1_score) if f1_score is not None else None,
@@ -59,14 +53,12 @@ def get_deepfake_frames():
     folder_path = 'static/deepfake_frames'  # Path to the folder containing deepfake frames
     image_files = []
 
-    # List all files in the deepfake_frames directory and filter for image files (e.g., .jpg, .png)
     for filename in os.listdir(folder_path):
         if filename.endswith(('.jpg')):
             image_files.append(f'/static/deepfake_frames/{filename}')  # Add the relative URL for each image
     
     return jsonify(image_files)
 
-# Endpoint to serve images from the static folder
 @app.route('/static/deepfake_frames/<filename>')
 def serve_image(filename):
     return send_from_directory(os.path.join(app.root_path, 'static', 'deepfake_frames'), filename)
@@ -96,7 +88,6 @@ def is_deepfake(video_path):
         frames_array = np.array(frames)
         frame_predictions = model.predict(frames_array)
 
-        # Count the number of deepfake frames and save them
         for i, pred in enumerate(frame_predictions):
             if pred < 0.5:
                 deepfake_frames.append(frames[i])
@@ -110,7 +101,6 @@ def is_deepfake(video_path):
         total_frames = len(frame_predictions)
         deepfake_percentage = (deepfake_frames_count / total_frames) * 100
 
-        # Determine result based on percentage of deepfake frames
         if deepfake_percentage > 70:
             final_result = "Deepfake"
         elif deepfake_percentage > 20:
@@ -118,7 +108,6 @@ def is_deepfake(video_path):
         else:
             final_result = "Not Deepfake"
 
-        # Prepare true labels and binary predictions for F1 Score and Accuracy
         true_labels = [1 if p < 0.5 else 0 for p in frame_predictions]
         binary_predictions = (frame_predictions < 0.5).astype(int)
 

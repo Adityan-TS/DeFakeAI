@@ -6,6 +6,8 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["OMP_NUM_THREADS"] = "8"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.config.threading.set_intra_op_parallelism_threads(8)
 tf.config.threading.set_inter_op_parallelism_threads(8)
 
@@ -85,26 +87,21 @@ def is_deepfake(video_path):
 
     cap.release()
 
-    # If there are frames to process
     if frames:
         frames_array = np.array(frames)
         
-        # Use batch processing
-        batch_size = 32  # Adjust batch size depending on the available memory
+        batch_size = 32
         frame_predictions = []
 
-        # Process the frames in batches
         for i in range(0, len(frames_array), batch_size):
             batch = frames_array[i:i+batch_size]
             batch_predictions = model.predict(batch)
             frame_predictions.extend(batch_predictions)
 
-        # Post-process predictions
         deepfake_frames = []
         for i, pred in enumerate(frame_predictions):
             if pred < 0.5:
                 deepfake_frames.append(frames[i])
-                # Save deepfake frames as images in the static folder
                 deepfake_frame_filename = f"deepfake_frame_{i}.jpg"
                 deepfake_frame_path = os.path.join(STATIC_FOLDER, deepfake_frame_filename)
                 cv2.imwrite(deepfake_frame_path, (frames[i] * 255).astype(np.uint8))
@@ -122,7 +119,7 @@ def is_deepfake(video_path):
             final_result = "Not Deepfake"
 
         true_labels = [1 if p < 0.5 else 0 for p in frame_predictions]
-        binary_predictions = (frame_predictions < 0.5).astype(int)
+        binary_predictions = [(p < 0.5).astype(int) for p in frame_predictions]  # Corrected this line
 
         f1_score = compute_f1_score(true_labels, binary_predictions)
         accuracy = compute_accuracy(true_labels, binary_predictions)
@@ -131,7 +128,6 @@ def is_deepfake(video_path):
     else:
         return "No frames extracted from video.", None, None, None, []
     
-
 def compute_f1_score(y_true, y_pred):
     y_true = tf.convert_to_tensor(y_true, dtype=tf.float32)
     y_pred = tf.convert_to_tensor(y_pred, dtype=tf.float32)

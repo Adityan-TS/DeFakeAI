@@ -4,6 +4,7 @@ import numpy as np
 from flask import Flask, request, render_template, jsonify, session, send_from_directory
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+import shutil
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["OMP_NUM_THREADS"] = "8"
@@ -68,6 +69,15 @@ def get_deepfake_frames():
 def serve_image(filename):
     return send_from_directory(os.path.join(app.root_path, 'static', 'deepfake_frames'), filename)
 
+def clear_static_folder():
+    """Deletes all files in the static/deepfake_frames folder."""
+    for filename in os.listdir(STATIC_FOLDER):
+        file_path = os.path.join(STATIC_FOLDER, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+
 def is_deepfake(video_path):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -97,6 +107,9 @@ def is_deepfake(video_path):
             batch = frames_array[i:i+batch_size]
             batch_predictions = model.predict(batch)
             frame_predictions.extend(batch_predictions)
+
+        # Clear static folder before saving new frames
+        clear_static_folder()
 
         deepfake_frames = []
         for i, pred in enumerate(frame_predictions):

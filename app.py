@@ -4,10 +4,8 @@ import numpy as np
 from flask import Flask, request, render_template, jsonify, session, send_from_directory
 import tensorflow as tf
 from tensorflow.keras.models import load_model
-import shutil
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-tf.config.set_visible_devices([], 'GPU')
 os.environ["OMP_NUM_THREADS"] = "8"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.config.threading.set_intra_op_parallelism_threads(8)
@@ -70,70 +68,64 @@ def get_deepfake_frames():
 def serve_image(filename):
     return send_from_directory(os.path.join(app.root_path, 'static', 'deepfake_frames'), filename)
 
-def clear_static_folder():
-    """Deletes all files in the static/deepfake_frames folder."""
-    for filename in os.listdir(STATIC_FOLDER):
-        file_path = os.path.join(STATIC_FOLDER, filename)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-        elif os.path.isdir(file_path):
-            shutil.rmtree(file_path)
-
 def is_deepfake(video_path):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return "Could not open video file.", None, None, None, []
 
-    frames = []
     deepfake_frame_paths = []
+    frame_predictions = []
+    total_frames = 0
+    batch_size = 25
+    frames_batch = []
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
+        # Resize and normalize the frame
         frame_resized = cv2.resize(frame, (224, 224))
         frame_normalized = frame_resized.astype(np.float32) / 255.0
-        frames.append(frame_normalized)
+        frames_batch.append(frame_normalized)
+        total_frames += 1
+
+        # Process batch if batch size is reached
+        if len(frames_batch) == batch_size:
+            frames_array = np.array(frames_batch)
+            batch_predictions = model.predict(frames_array, verbose=0)
+            frame_predictions.extend(batch_predictions)
+            frames_batch.clear()  # Clear batch to save memory
+
+    # Process remaining frames in the last batch
+    if frames_batch:
+        frames_array = np.array(frames_batch)
+        batch_predictions = model.predict(frames_array, verbose=0)
+        frame_predictions.extend(batch_predictions)
 
     cap.release()
 
-    if frames:
-        frames_array = np.array(frames)
-        
-        batch_size = 32
-        frame_predictions = []
-
-        for i in range(0, len(frames_array), batch_size):
-            batch = frames_array[i:i+batch_size]
-            batch_predictions = model.predict(batch)
-            frame_predictions.extend(batch_predictions)
-
-        # Clear static folder before saving new frames
-        clear_static_folder()
-
-        deepfake_frames = []
+    # Analyze predictions if any frames were processed
+    if frame_predictions:
+        deepfake_frames_count = 0
         for i, pred in enumerate(frame_predictions):
-            if pred < 0.5:
-                deepfake_frames.append(frames[i])
+            if pred < 0.5:  # Deepfake threshold
                 deepfake_frame_filename = f"deepfake_frame_{i}.jpg"
                 deepfake_frame_path = os.path.join(STATIC_FOLDER, deepfake_frame_filename)
-                cv2.imwrite(deepfake_frame_path, (frames[i] * 255).astype(np.uint8))
+                cv2.imwrite(deepfake_frame_path, (frames_batch[i % batch_size] * 255).astype(np.uint8))
                 deepfake_frame_paths.append(f"/deepfake-frames/{deepfake_frame_filename}")
+                deepfake_frames_count += 1
 
-        deepfake_frames_count = len(deepfake_frames)
-        total_frames = len(frame_predictions)
         deepfake_percentage = (deepfake_frames_count / total_frames) * 100
+        final_result = (
+            "Deepfake" if deepfake_percentage > 70
+            else "Contains Some Deepfake Content" if deepfake_percentage > 20
+            else "Not Deepfake"
+        )
 
-        if deepfake_percentage > 70:
-            final_result = "Deepfake"
-        elif deepfake_percentage > 20:
-            final_result = "Contains Some Deepfake Content"
-        else:
-            final_result = "Not Deepfake"
-
+        # Compute F1 score and accuracy
         true_labels = [1 if p < 0.5 else 0 for p in frame_predictions]
-        binary_predictions = [(p < 0.5).astype(int) for p in frame_predictions]  # Corrected this line
+        binary_predictions = [int(p < 0.5) for p in frame_predictions]
 
         f1_score = compute_f1_score(true_labels, binary_predictions)
         accuracy = compute_accuracy(true_labels, binary_predictions)

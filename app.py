@@ -5,8 +5,12 @@ from flask import Flask, request, render_template, jsonify, session, send_from_d
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+tf.config.threading.set_intra_op_parallelism_threads(8)
+tf.config.threading.set_inter_op_parallelism_threads(8)
+
 app = Flask(__name__)
-app.secret_key = 'DeFake AI'  # Set a secret key for session management
+app.secret_key = 'DeFake AI'
 
 UPLOAD_FOLDER = r'\uploads'
 STATIC_FOLDER = 'static/deepfake_frames'
@@ -21,7 +25,6 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-        
     if 'video_file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -50,12 +53,12 @@ def upload():
 
 @app.route('/deepfake-frames', methods=['GET'])
 def get_deepfake_frames():
-    folder_path = 'static/deepfake_frames'  # Path to the folder containing deepfake frames
+    folder_path = 'static/deepfake_frames'
     image_files = []
 
     for filename in os.listdir(folder_path):
         if filename.endswith(('.jpg')):
-            image_files.append(f'/static/deepfake_frames/{filename}')  # Add the relative URL for each image
+            image_files.append(f'/static/deepfake_frames/{filename}')
     
     return jsonify(image_files)
 
@@ -141,8 +144,7 @@ def compute_f1_score(y_true, y_pred):
     recall = true_positives / (actual_positives + tf.keras.backend.epsilon())
 
     f1_score = 2 * ((precision * recall) / (precision + recall + tf.keras.backend.epsilon()))
-    return tf.clip_by_value(f1_score, 0.0, 1.0)  # Ensures F1 score is between 0 and 1
-
+    return tf.clip_by_value(f1_score, 0.0, 1.0)
 
 def compute_accuracy(y_true, y_pred):
     correct_predictions = tf.equal(y_true, y_pred)
@@ -159,8 +161,5 @@ def compute_accuracy(y_true, y_pred):
 
     return accuracy
 
-
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
-
